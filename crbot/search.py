@@ -184,27 +184,20 @@ class RolloutSearch:
 
     # ---------------------------------------------------------------- Suche
 
-    def decide(self, units: list[tuple[str, int, float, float, float]],
-               hand: list[str], elixir: float,
-               tower_hp: dict[str, float] | None = None) -> Decision:
-        """Wählt den besten Zug.
+    def evaluate(self, units: list[tuple[str, int, float, float, float]],
+                 cands: list[Candidate],
+                 tower_hp: dict[str, float] | None = None) -> tuple[float, list[float]]:
+        """Bewertet vorgegebene Kandidaten. Gibt (Warte-Score, Scores) zurueck.
 
-        ``units`` sind die wahrgenommenen Einheiten als
-        ``(klasse, seite, x, y, hp)``.
+        Getrennt von :meth:`decide`, damit auch **nachtraeglich** bewertet
+        werden kann — die Nachanalyse stellt hier den tatsaechlich gespielten
+        Zug neben die Alternativen.
         """
-        t0 = time.perf_counter()
-        threats = [(x, y) for cls, side, x, y, _hp in units
-                   if side == 1 and self._stats(cls) is not None]
-
-        cands = self.candidates([c for c in hand if c], elixir, threats)
-        # Platz 0 ist immer "nichts tun" — die Vergleichsbasis.
         batch = len(cands) + 1
         capacity = 6 + len(units) + 1
 
         st = self.fm.with_towers(batch, capacity, tower_hp)
         for i, (cls, side, x, y, hp) in enumerate(units):
-            if self._stats(cls) is None:
-                continue
             key = cls if cls in self.fm.stats.index else _base_key(cls, self.fm.stats.index)
             if key is None:
                 continue
@@ -225,12 +218,27 @@ class RolloutSearch:
                 self.fm.add_unit(st, slot, key, 0, c.x, c.y, batch_mask=mask)
 
         out = self.fm.rollout(st, self.horizon_s, self.dt)
-        # Reiner Turm-HP-Saldo; das Elixir kommt erst in der Schwelle unten dazu.
+        # Reiner Turm-HP-Saldo; das Elixir kommt erst in der Schwelle dazu.
         scores = self.fm.score(st, out)
+        return float(scores[0]), [float(v) for v in scores[1:]]
 
-        wait_score = float(scores[0])
+    def decide(self, units: list[tuple[str, int, float, float, float]],
+               hand: list[str], elixir: float,
+               tower_hp: dict[str, float] | None = None) -> Decision:
+        """Waehlt den besten Zug.
+
+        ``units`` sind die wahrgenommenen Einheiten als
+        ``(klasse, seite, x, y, hp)``.
+        """
+        t0 = time.perf_counter()
+        threats = [(x, y) for cls, side, x, y, _hp in units
+                   if side == 1 and self._stats(cls) is not None]
+
+        cands = self.candidates([c for c in hand if c], elixir, threats)
+        wait_score, scores = self.evaluate(units, cands, tower_hp)
+
         ranked: list[tuple[Candidate | None, float]] = [(None, wait_score)]
-        ranked += [(c, float(scores[i])) for i, c in enumerate(cands, start=1)]
+        ranked += list(zip(cands, scores))
         ranked.sort(key=lambda r: -r[1])
 
         best_cand, best_score = ranked[0]

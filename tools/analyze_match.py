@@ -18,6 +18,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from crbot import arena  # noqa: E402
 from crbot.matchlog import MatchLog, MatchRecorder, Unit  # noqa: E402
+from crbot.counterfactual import analyze_plays  # noqa: E402
+from crbot.counterfactual import to_markdown as cf_markdown  # noqa: E402
 from crbot.postmortem import analyze, to_markdown  # noqa: E402
 
 # Turm-HP auf Turnierstufe.
@@ -112,6 +114,8 @@ def main() -> None:
     ap.add_argument("--demo", action="store_true")
     ap.add_argument("--md", type=pathlib.Path, help="Bericht als Markdown schreiben")
     ap.add_argument("--save-demo", type=pathlib.Path, help="synthetisches Protokoll ablegen")
+    ap.add_argument("--counterfactual", action="store_true",
+                    help="zusaetzlich bewerten, was besser gewesen waere (rechenintensiv)")
     args = ap.parse_args()
 
     if args.demo:
@@ -126,6 +130,10 @@ def main() -> None:
 
     pm = analyze(log)
     report = to_markdown(pm)
+
+    if args.counterfactual:
+        from crbot.search import RolloutSearch
+        report += "\n" + cf_markdown(analyze_plays(log, RolloutSearch()))
 
     if args.md:
         args.md.parent.mkdir(parents=True, exist_ok=True)

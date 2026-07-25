@@ -71,6 +71,7 @@ crbot/
   opponent.py   Deck-Zyklus und Elixir des Gegners mitzählen + Spekulations-EV
   search.py     Rollout-Suche: Kandidaten erzeugen, ausrollen, besten wählen
   calibration.py Quoten gegen die Wirklichkeit prüfen und korrigieren
+  counterfactual.py  Was wäre besser gewesen? Züge gegen Alternativen
   data/unit_stats.json   208 Einheiten, eingecheckt — zur Laufzeit kein Netz noetig
 tools/
   analyze_dataset.py    Datensatz-Report (Klassen, Boxgrößen, Lücken)
@@ -161,6 +162,8 @@ Maske → freigestelltes RGBA. Du weißt exakt was und wo, das Label fällt ab.
 - Gegnermodell (Zyklus, Elixir, Spekulations-EV), 10/10 Selbsttests
 - Rollout-Suche mit Aktionsmaskierung, 10/10 Selbsttests
 - Kalibrierung der Vorhersagequoten
+- Kollision und Blocken im Vorwärtsmodell
+- Kontrafaktische Nachanalyse (`analyze_match.py --counterfactual`)
 - Colab-Notebook
 
 **29 Selbsttests laufen ohne GPU, ohne Emulator und ohne Spiel.**
@@ -195,9 +198,9 @@ Maske → freigestelltes RGBA. Du weißt exakt was und wo, das Label fällt ab.
 - Zauber mit Wirkung über Zeit (Gift, Tornado, Erdbeben) stehen mit Radius und
   Kosten in der Tabelle, ihr Schaden ist aber 0 — der steckt im
   Flächeneffekt-Objekt und ist noch nicht aufgelöst.
-- Das Vorwärtsmodell kennt keine Kollision. Blocken funktioniert deshalb nicht:
-  Ein Ritter vor einem Hog Rider hält ihn nicht auf, er beschädigt ihn nur.
-  Das unterschätzt Verteidigung durch Blocker systematisch.
+- Die kontrafaktische Analyse nutzt dasselbe Vorwärtsmodell wie die Suche. Was
+  das Modell falsch einschätzt, schätzt es auch im Rückblick falsch ein — grobe
+  Fehlgriffe findet sie, Feinheiten nicht.
 
 ---
 
