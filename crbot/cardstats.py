@@ -39,6 +39,9 @@ import urllib.request
 STATS_URL = (
     "https://raw.githubusercontent.com/RoyaleAPI/cr-api-data/master/docs/json/cards_stats.json"
 )
+CARDS_URL = (
+    "https://raw.githubusercontent.com/RoyaleAPI/cr-api-data/master/docs/json/cards.json"
+)
 
 # Interne Geschwindigkeitsstufe -> Kacheln pro Sekunde.
 SPEED_TO_TILES_PER_S = 0.0125
@@ -69,6 +72,7 @@ class UnitStats:
     mass: float
     deploy_s: float
     elixir: float | None
+    is_spell: bool = False
 
     def to_dict(self) -> dict:
         return dataclasses.asdict(self)
@@ -95,10 +99,20 @@ def fetch_raw(url: str = STATS_URL) -> dict:
         return json.loads(r.read().decode())
 
 
-def build_table(raw: dict) -> dict[str, UnitStats]:
-    """Normalisiert den Rohdump in ``key -> UnitStats``."""
+def build_table(raw: dict, cards: list[dict] | None = None) -> dict[str, UnitStats]:
+    """Normalisiert den Rohdump in ``key -> UnitStats``.
+
+    ``cards`` ist die separate Kartenliste (``cards.json``). Sie wird gebraucht,
+    weil Schadenszauber wie Feuerball, Pfeile und Rakete **nur** als Projektil
+    im Dump stehen — ihre Elixirkosten stehen ausschliesslich in der
+    Kartenliste. Ohne sie fehlt der Suche ein Viertel jedes Decks.
+    """
     projectiles = {p["name"]: p for p in raw.get("projectile", []) if p.get("name")}
     elixir_by_key = {}
+    for c in cards or []:
+        key = normalize_key(c.get("key") or c.get("name", ""))
+        if key and c.get("elixir") is not None:
+            elixir_by_key[key] = _num(c.get("elixir"))
     for section in ("troop", "spell", "building"):
         for c in raw.get(section, []):
             k = c.get("key") or c.get("name", "")
@@ -106,6 +120,60 @@ def build_table(raw: dict) -> dict[str, UnitStats]:
                 elixir_by_key[normalize_key(k)] = _num(c.get("mana_cost"))
 
     out: dict[str, UnitStats] = {}
+
+    # Zauber zuerst: sie haben keine HP und keine Bewegung, aber Kosten,
+    # Radius und Sofortschaden. Ohne sie kann die Suche ein Viertel jedes
+    # Decks nicht einmal in Betracht ziehen.
+    for c in raw.get("spell", []):
+        name = c.get("name")
+        if not name:
+            continue
+        key = normalize_key(c.get("key") or name)
+        damage = _num(c.get("damage"))
+        if damage <= 0:
+            proj = projectiles.get(c.get("projectile") or "")
+            if proj:
+                damage = _num(proj.get("damage"))
+        radius = _milli(c.get("radius"))
+        if radius <= 0:
+            proj = projectiles.get(c.get("projectile") or "")
+            if proj:
+                radius = _milli(proj.get("radius"))
+        out[key] = UnitStats(
+            key=key, name=name, hp=0.0, damage=damage, dps=damage, hit_s=1.0,
+            range=0.0, speed=0.0, sight=0.0,
+            attacks_ground=bool(c.get("hits_ground", True)),
+            attacks_air=bool(c.get("hits_air", True)),
+            targets_buildings_only=False, is_air=False,
+            splash_radius=radius, collision_radius=0.0, mass=0.0,
+            deploy_s=0.0, elixir=resolve_elixir(key, elixir_by_key),
+            is_spell=True,
+        )
+
+    # Schadenszauber stehen nur als Projektil im Dump. Wir nehmen genau die,
+    # fuer die auch eine Karte mit Elixirpreis existiert — das filtert interne
+    # Projektile (Turmpfeile, Bomben) zuverlaessig heraus.
+    for pname, proj in projectiles.items():
+        key = normalize_key(pname)
+        if key.endswith("-spell"):
+            key = key[: -len("-spell")]
+        key = PROJECTILE_TO_CARD.get(key, key)
+        if key in out or key not in elixir_by_key:
+            continue
+        damage = _num(proj.get("damage"))
+        radius = _milli(proj.get("radius"))
+        if damage <= 0 and radius <= 0:
+            continue
+        out[key] = UnitStats(
+            key=key, name=pname, hp=0.0, damage=damage, dps=damage, hit_s=1.0,
+            range=0.0, speed=0.0, sight=0.0,
+            attacks_ground=bool(proj.get("aoe_to_ground", True)),
+            attacks_air=bool(proj.get("aoe_to_air", True)),
+            targets_buildings_only=False, is_air=False,
+            splash_radius=radius, collision_radius=0.0, mass=0.0,
+            deploy_s=0.0, elixir=elixir_by_key.get(key), is_spell=True,
+        )
+
     for section, movable in (("characters", True), ("building", False)):
         for c in raw.get(section, []):
             name = c.get("name")
@@ -151,8 +219,18 @@ def build_table(raw: dict) -> dict[str, UnitStats]:
                 mass=_num(c.get("mass"), 1.0),
                 deploy_s=_num(c.get("deploy_time"), 1000.0) / 1000.0,
                 elixir=resolve_elixir(key, elixir_by_key),
+                is_spell=False,
             )
     return out
+
+
+# Projektilnamen, die nicht per Namensregel auf ihre Karte fuehren.
+PROJECTILE_TO_CARD: dict[str, str] = {
+    "log-projectile": "the-log",
+    "snowball": "giant-snowball",
+    "barb-log-projectile": "barbarian-barrel",
+    "goblin-barrel": "goblin-barrel",
+}
 
 
 # Einheiten, deren Karte anders heisst als die Einheit selbst. Der Plural wird

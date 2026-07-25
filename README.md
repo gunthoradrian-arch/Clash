@@ -69,6 +69,8 @@ crbot/
   postmortem.py Nachanalyse: woran lag die Niederlage?
   forward.py    Vorwärtsmodell — B Szenarien parallel durchrechnen (NumPy, batched)
   opponent.py   Deck-Zyklus und Elixir des Gegners mitzählen + Spekulations-EV
+  search.py     Rollout-Suche: Kandidaten erzeugen, ausrollen, besten wählen
+  calibration.py Quoten gegen die Wirklichkeit prüfen und korrigieren
   data/unit_stats.json   208 Einheiten, eingecheckt — zur Laufzeit kein Netz noetig
 tools/
   analyze_dataset.py    Datensatz-Report (Klassen, Boxgrößen, Lücken)
@@ -81,6 +83,7 @@ tools/
   analyze_match.py      Nachanalyse eines Spiels (--demo laeuft ohne Emulator)
   forward_selftest.py   9 Szenarien mit handgerechnetem Sollwert
   opponent_selftest.py  10 Abläufe gegen die Spielregeln geprüft
+  decision_selftest.py  Suche + Kalibrierung, 10 Prüfungen
 training/
   train_colab.ipynb     Training auf Gratis-GPU, läuft im Browser
 docs/
@@ -156,15 +159,22 @@ Maske → freigestelltes RGBA. Du weißt exakt was und wo, das Label fällt ab.
 - Nachanalyse, Ende-zu-Ende auf einem synthetischen Spiel verifiziert
 - Vorwärtsmodell, 9/9 Selbsttests gegen von Hand gerechnete Sollwerte
 - Gegnermodell (Zyklus, Elixir, Spekulations-EV), 10/10 Selbsttests
+- Rollout-Suche mit Aktionsmaskierung, 10/10 Selbsttests
+- Kalibrierung der Vorhersagequoten
 - Colab-Notebook
 
-**Noch nicht**
-- Training — dieser Container hat keine GPU
-- Tracker (ByteTrack/IoU), Deck-Prior
-- Handkarten-Fingerprint, Elixir-/HP-Reads
-- Policy und Rollout-Suche auf dem Vorwärtsmodell
+**29 Selbsttests laufen ohne GPU, ohne Emulator und ohne Spiel.**
+
+**Braucht zwingend den PC** (GPU, Emulator oder laufendes Spiel)
+- Detektor trainieren — Datensatz und Notebook stehen, es fehlt nur die GPU
+- Capture- und Eingabeschicht (scrcpy/minitouch) samt Latenzmessung
+- Handkarten-Fingerprint — braucht Screenshots aus dem Spiel
+- Cutout-Ernte für neue Karten
+- Torch-Backend des Vorwärtsmodells (die NumPy-Fassung ist die Referenz)
+
+**Braucht Daten, nicht den PC**
 - Statistische Platzierungs-Priors (wohin legt der Gegner welche Karte?)
-- Torch-Backend für das Vorwärtsmodell (GPU); NumPy-Fassung steht
+- Tracker (ByteTrack/IoU) — baubar, aber erst sinnvoll mit echten Detektionen
 
 **Bekannte Einschränkungen**
 - Teamverteilung der Cutouts liegt bei ~1:2 (eigene:gegnerische). Der Generator
@@ -178,9 +188,16 @@ Maske → freigestelltes RGBA. Du weißt exakt was und wo, das Label fällt ab.
   Bei mehreren Angreifern auf denselben Turm wird anteilig verteilt, nicht exakt.
 - Das Vorwärtsmodell lässt Wegfindung um Gebäude, Aggro-Wechsel, Ladeangriffe,
   Verlangsamung, Schilde und Spawner weg. Über 3–6 s brauchbar, über 20 s nicht.
-- 132 der 208 Einträge in `unit_stats.json` haben keine Elixirkosten. Das sind
+- Ein Teil der Einträge in `unit_stats.json` hat keine Elixirkosten. Das sind
   überwiegend Projektile, Event-Objekte und Turmvarianten — also nichts, was
-  jemand aus der Hand spielt. Alle gängigen Kampfeinheiten haben ihren Preis.
+  jemand aus der Hand spielt. Alle gängigen Kampfeinheiten und alle 17 Zauber
+  haben ihren Preis.
+- Zauber mit Wirkung über Zeit (Gift, Tornado, Erdbeben) stehen mit Radius und
+  Kosten in der Tabelle, ihr Schaden ist aber 0 — der steckt im
+  Flächeneffekt-Objekt und ist noch nicht aufgelöst.
+- Das Vorwärtsmodell kennt keine Kollision. Blocken funktioniert deshalb nicht:
+  Ein Ritter vor einem Hog Rider hält ihn nicht auf, er beschädigt ihn nur.
+  Das unterschätzt Verteidigung durch Blocker systematisch.
 
 ---
 

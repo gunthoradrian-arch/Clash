@@ -263,6 +263,32 @@ class ForwardModel:
         st.alive &= st.hp > 0.0
         st.hp = np.maximum(st.hp, 0.0)
 
+    def apply_spell(self, st: BatchState, x: float, y: float, radius: float,
+                    damage: float, caster_side: int = 0,
+                    batch_mask: np.ndarray | None = None,
+                    tower_damage_percent: float = -70.0) -> None:
+        """Sofortschaden eines Zaubers im Umkreis — in-place.
+
+        Zauber sind keine Einheiten: Sie erscheinen nicht auf dem Feld, sondern
+        wirken einmalig. Deshalb werden sie vor dem Ausrollen angewandt statt
+        als Einheit gesetzt.
+
+        Türme nehmen deutlich weniger Zauberschaden (im Spiel typisch −70 %);
+        ohne diese Regel bewertet die Suche Raketen auf den Turm masslos zu gut.
+        """
+        if radius <= 0 or damage <= 0:
+            return
+        d = np.linalg.norm(st.pos - np.array([x, y], np.float32), axis=-1)
+        hit = (d <= radius) & st.alive & (st.side != caster_side)
+        if batch_mask is not None:
+            hit &= batch_mask[:, None]
+
+        is_tower = self.stats.is_building[st.type_idx]
+        factor = np.where(is_tower, max(0.0, 1.0 + tower_damage_percent / 100.0), 1.0)
+        st.hp -= np.where(hit, damage * factor, 0.0)
+        st.alive &= st.hp > 0.0
+        st.hp = np.maximum(st.hp, 0.0)
+
     def rollout(self, st: BatchState, horizon_s: float, dt: float = 0.25) -> BatchState:
         out = st.copy()
         for _ in range(max(1, int(round(horizon_s / dt)))):
