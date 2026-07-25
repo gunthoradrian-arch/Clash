@@ -60,6 +60,34 @@ SCALE_AT_TOP = 0.96
 SCALE_AT_BOTTOM = 1.0
 
 
+# --------------------------------------------------------------- Kacheln
+# Die Spielwerte (Reichweite, Tempo, Radien) sind in Kacheln angegeben, die
+# Wahrnehmung liefert Pixel. Der Umrechnungsfaktor faellt aus den Turmankern:
+# Prinzessinnentuerme stehen auf x = 3,5 und 14,5 der 18 Kacheln Breite und auf
+# y = 6,5 bzw. 25,5 der 32 Kacheln Hoehe.
+#
+#   x: (456 - 114) px / (14,5 - 3,5) Kacheln = 31,1 px/Kachel
+#   y: (684 - 211) px / (25,5 -  6,5) Kacheln = 24,9 px/Kachel
+#
+# Dass die Achsen unterschiedlich skalieren, ist kein Fehler: die Kamera blickt
+# schraeg, die Vertikale ist gestaucht.
+TILES_W = 18
+TILES_H = 32
+PX_PER_TILE_X = 31.1
+PX_PER_TILE_Y = 24.9
+TILE_ORIGIN_PX = (114.0 - 3.5 * PX_PER_TILE_X, 211.0 - 6.5 * PX_PER_TILE_Y)
+
+
+def px_to_tile(x_px: float, y_px: float) -> tuple[float, float]:
+    ox, oy = TILE_ORIGIN_PX
+    return ((x_px - ox) / PX_PER_TILE_X, (y_px - oy) / PX_PER_TILE_Y)
+
+
+def tile_to_px(x_t: float, y_t: float) -> tuple[float, float]:
+    ox, oy = TILE_ORIGIN_PX
+    return (ox + x_t * PX_PER_TILE_X, oy + y_t * PX_PER_TILE_Y)
+
+
 def depth_scale(y_px: float) -> float:
     """Skalierungsfaktor für eine Einheit auf Höhe ``y_px``."""
     top, bottom = FIELD_Y

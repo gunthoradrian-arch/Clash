@@ -64,6 +64,10 @@ crbot/
   cutouts.py    Cutout-Bibliothek, HP-Balken-Farbklassifikation, Schwarm-/Zauberlisten
   compose.py    Szenensynthese
   classes.py    Klassenliste als einzige Quelle der Wahrheit
+  cardstats.py  Kampfwerte (HP, DPS, Reichweite, Tempo) aus dem Spieldaten-Dump
+  matchlog.py   Match-Protokoll (JSONL) + Recorder
+  postmortem.py Nachanalyse: woran lag die Niederlage?
+  data/unit_stats.json   208 Einheiten, eingecheckt — zur Laufzeit kein Netz noetig
 tools/
   analyze_dataset.py    Datensatz-Report (Klassen, Boxgrößen, Lücken)
   generate_dataset.py   Synthetische Bilder + Labels + Preview-Overlays
@@ -71,6 +75,8 @@ tools/
   harvest_cutouts.py    Eigene Cutouts per Hintergrundsubtraktion (+ Selbsttest)
   coverage_gap.py       Abgleich gegen die aktuelle Kartenliste -> Ernteliste
   bench_latency.py      Latenzbudget messen (Capture / Detektor / Eingabe)
+  build_cardstats.py    Kampfwerte-Tabelle erzeugen (nach Balance-Updates neu)
+  analyze_match.py      Nachanalyse eines Spiels (--demo laeuft ohne Emulator)
 training/
   train_colab.ipynb     Training auf Gratis-GPU, läuft im Browser
 docs/
@@ -142,13 +148,15 @@ Maske → freigestelltes RGBA. Du weißt exakt was und wo, das Label fällt ab.
 - Val-Set-Aufbereitung (42 Episoden, Split nach Episode, 115 Klassen belegt)
 - Cutout-Ernte, Kernextraktion per Selbsttest verifiziert (IoU 0,92)
 - Abdeckungsabgleich gegen eine aktuelle Kartenliste
+- Kampfwerte-Tabelle: 208 Einheiten, Stichprobe gegen bekannte Werte geprueft
+- Nachanalyse, Ende-zu-Ende auf einem synthetischen Spiel verifiziert
 - Colab-Notebook
 
 **Noch nicht**
 - Training — dieser Container hat keine GPU
 - Tracker (ByteTrack/IoU), Deck-Prior
 - Handkarten-Fingerprint, Elixir-/HP-Reads
-- Kartendatenbank, Vorwärtsmodell, Policy
+- Vorwärtsmodell als Tensor-Batch, Policy, Rollout-Suche
 
 **Bekannte Einschränkungen**
 - Teamverteilung der Cutouts liegt bei ~1:2 (eigene:gegnerische). Der Generator
@@ -158,6 +166,8 @@ Maske → freigestelltes RGBA. Du weißt exakt was und wo, das Label fällt ab.
   erzeugen.
 - Ein Cutout-Ordner (`small-text`) hat keine Klassen-ID und wird übersprungen.
 - Die Zeichenreihenfolge folgt der Ziehreihenfolge, nicht strikt y-sortiert.
+- Die Schadenszuordnung in der Nachanalyse ist eine Heuristik (Reichweite + DPS).
+  Bei mehreren Angreifern auf denselben Turm wird anteilig verteilt, nicht exakt.
 
 ---
 
