@@ -68,6 +68,7 @@ crbot/
   matchlog.py   Match-Protokoll (JSONL) + Recorder
   postmortem.py Nachanalyse: woran lag die Niederlage?
   forward.py    Vorwärtsmodell — B Szenarien parallel durchrechnen (NumPy, batched)
+  opponent.py   Deck-Zyklus und Elixir des Gegners mitzählen + Spekulations-EV
   data/unit_stats.json   208 Einheiten, eingecheckt — zur Laufzeit kein Netz noetig
 tools/
   analyze_dataset.py    Datensatz-Report (Klassen, Boxgrößen, Lücken)
@@ -79,6 +80,7 @@ tools/
   build_cardstats.py    Kampfwerte-Tabelle erzeugen (nach Balance-Updates neu)
   analyze_match.py      Nachanalyse eines Spiels (--demo laeuft ohne Emulator)
   forward_selftest.py   9 Szenarien mit handgerechnetem Sollwert
+  opponent_selftest.py  10 Abläufe gegen die Spielregeln geprüft
 training/
   train_colab.ipynb     Training auf Gratis-GPU, läuft im Browser
 docs/
@@ -153,6 +155,7 @@ Maske → freigestelltes RGBA. Du weißt exakt was und wo, das Label fällt ab.
 - Kampfwerte-Tabelle: 208 Einheiten, Stichprobe gegen bekannte Werte geprueft
 - Nachanalyse, Ende-zu-Ende auf einem synthetischen Spiel verifiziert
 - Vorwärtsmodell, 9/9 Selbsttests gegen von Hand gerechnete Sollwerte
+- Gegnermodell (Zyklus, Elixir, Spekulations-EV), 10/10 Selbsttests
 - Colab-Notebook
 
 **Noch nicht**
@@ -160,6 +163,7 @@ Maske → freigestelltes RGBA. Du weißt exakt was und wo, das Label fällt ab.
 - Tracker (ByteTrack/IoU), Deck-Prior
 - Handkarten-Fingerprint, Elixir-/HP-Reads
 - Policy und Rollout-Suche auf dem Vorwärtsmodell
+- Statistische Platzierungs-Priors (wohin legt der Gegner welche Karte?)
 - Torch-Backend für das Vorwärtsmodell (GPU); NumPy-Fassung steht
 
 **Bekannte Einschränkungen**
@@ -174,6 +178,9 @@ Maske → freigestelltes RGBA. Du weißt exakt was und wo, das Label fällt ab.
   Bei mehreren Angreifern auf denselben Turm wird anteilig verteilt, nicht exakt.
 - Das Vorwärtsmodell lässt Wegfindung um Gebäude, Aggro-Wechsel, Ladeangriffe,
   Verlangsamung, Schilde und Spawner weg. Über 3–6 s brauchbar, über 20 s nicht.
+- 132 der 208 Einträge in `unit_stats.json` haben keine Elixirkosten. Das sind
+  überwiegend Projektile, Event-Objekte und Turmvarianten — also nichts, was
+  jemand aus der Hand spielt. Alle gängigen Kampfeinheiten haben ihren Preis.
 
 ---
 

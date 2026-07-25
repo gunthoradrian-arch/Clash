@@ -150,9 +150,54 @@ def build_table(raw: dict) -> dict[str, UnitStats]:
                 collision_radius=_milli(c.get("collision_radius"), 0.5),
                 mass=_num(c.get("mass"), 1.0),
                 deploy_s=_num(c.get("deploy_time"), 1000.0) / 1000.0,
-                elixir=elixir_by_key.get(key),
+                elixir=resolve_elixir(key, elixir_by_key),
             )
     return out
+
+
+# Einheiten, deren Karte anders heisst als die Einheit selbst. Der Plural wird
+# automatisch probiert; hier stehen nur die Faelle, die davon abweichen.
+UNIT_TO_CARD: dict[str, str] = {
+    "elite-barbarian": "elite-barbarians",
+    "royal-recruit": "royal-recruits",
+    "royal-hog": "royal-hogs",
+    "rascal-boy": "rascals",
+    "rascal-girl": "rascals",
+    "lava-pup": "lava-hound",
+    "golemite": "golem",
+    "elixir-golemite": "elixir-golem",
+    "phoenix-egg": "phoenix",
+    "phoenix-small": "phoenix",
+    "phoenix-big": "phoenix",
+    "gurad": "guards",       # Schreibweise aus dem Quelldatensatz
+    "guard": "guards",
+    "zappy": "zappies",
+    "skeleton-dragon": "skeleton-dragons",
+    "wall-breaker": "wall-breakers",
+    "spear-goblin": "spear-goblins",
+    "three-musketeer": "three-musketeers",
+    "dirt": "miner",
+    "bowl": "bowler",
+    "axe": "executioner",
+}
+
+
+def resolve_elixir(key: str, elixir_by_key: dict[str, float]) -> float | None:
+    """Findet die Elixirkosten der **Karte** zu einer Einheit.
+
+    Der Spieldaten-Dump fuehrt Kampfwerte je Einheit (``skeleton``), Kosten aber
+    je Karte (``skeletons``). Ohne diese Aufloesung bleiben 147 von 208
+    Einheiten ohne Preis — und jede Bezahlbarkeitspruefung rechnet mit einem
+    Ersatzwert statt mit der Wahrheit.
+
+    Fuer Karten, die mehrere Einheiten stellen, traegt **jede** Einheit die
+    Kosten der ganzen Karte. Das ist fuer die Frage "kann er sich das leisten?"
+    genau richtig, fuer "was ist diese eine Einheit wert?" dagegen zu hoch.
+    """
+    for candidate in (key, UNIT_TO_CARD.get(key), f"{key}s", f"{key}es"):
+        if candidate and candidate in elixir_by_key:
+            return elixir_by_key[candidate]
+    return None
 
 
 def normalize_key(name: str) -> str:
