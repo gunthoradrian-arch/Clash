@@ -69,6 +69,7 @@ tools/
   generate_dataset.py   Synthetische Bilder + Labels + Preview-Overlays
   prepare_real_val.py   Val-Set aus echten Frames, Split nach Episode
   harvest_cutouts.py    Eigene Cutouts per Hintergrundsubtraktion (+ Selbsttest)
+  coverage_gap.py       Abgleich gegen die aktuelle Kartenliste -> Ernteliste
 training/
   train_colab.ipynb     Training auf Gratis-GPU, läuft im Browser
 docs/
@@ -139,6 +140,7 @@ Maske → freigestelltes RGBA. Du weißt exakt was und wo, das Label fällt ab.
 - Generator inkl. Sichtprüfung der Ausgabe
 - Val-Set-Aufbereitung (42 Episoden, Split nach Episode, 115 Klassen belegt)
 - Cutout-Ernte, Kernextraktion per Selbsttest verifiziert (IoU 0,92)
+- Abdeckungsabgleich gegen eine aktuelle Kartenliste
 - Colab-Notebook
 
 **Noch nicht**
