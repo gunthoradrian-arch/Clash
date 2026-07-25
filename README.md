@@ -70,6 +70,7 @@ tools/
   prepare_real_val.py   Val-Set aus echten Frames, Split nach Episode
   harvest_cutouts.py    Eigene Cutouts per Hintergrundsubtraktion (+ Selbsttest)
   coverage_gap.py       Abgleich gegen die aktuelle Kartenliste -> Ernteliste
+  bench_latency.py      Latenzbudget messen (Capture / Detektor / Eingabe)
 training/
   train_colab.ipynb     Training auf Gratis-GPU, läuft im Browser
 docs/
