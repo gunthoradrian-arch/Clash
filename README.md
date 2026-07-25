@@ -72,6 +72,8 @@ crbot/
   search.py     Rollout-Suche: Kandidaten erzeugen, ausrollen, besten wählen
   calibration.py Quoten gegen die Wirklichkeit prüfen und korrigieren
   counterfactual.py  Was wäre besser gewesen? Züge gegen Alternativen
+  tracker.py    Erkennungen über Frames verfolgen: Kennung, Tempo, Aussetzer
+  pipeline.py   Die Schleife: Wahrnehmung → Tracker → Gegnermodell → Suche → Zug
   data/unit_stats.json   208 Einheiten, eingecheckt — zur Laufzeit kein Netz noetig
 tools/
   analyze_dataset.py    Datensatz-Report (Klassen, Boxgrößen, Lücken)
@@ -85,6 +87,8 @@ tools/
   forward_selftest.py   9 Szenarien mit handgerechnetem Sollwert
   opponent_selftest.py  10 Abläufe gegen die Spielregeln geprüft
   decision_selftest.py  Suche + Kalibrierung, 10 Prüfungen
+  tracker_selftest.py   Tracking, 7 Prüfungen
+  pipeline_selftest.py  Trockenlauf der ganzen Schleife, 6 Prüfungen
 training/
   train_colab.ipynb     Training auf Gratis-GPU, läuft im Browser
 docs/
@@ -164,9 +168,11 @@ Maske → freigestelltes RGBA. Du weißt exakt was und wo, das Label fällt ab.
 - Kalibrierung der Vorhersagequoten
 - Kollision und Blocken im Vorwärtsmodell
 - Kontrafaktische Nachanalyse (`analyze_match.py --counterfactual`)
+- Tracker mit Geschwindigkeitsschätzung, 7/7 Selbsttests
+- Komplette Schleife im Trockenlauf, 6/6 Selbsttests
 - Colab-Notebook
 
-**29 Selbsttests laufen ohne GPU, ohne Emulator und ohne Spiel.**
+**45 Selbsttests laufen ohne GPU, ohne Emulator und ohne Spiel.**
 
 **Braucht zwingend den PC** (GPU, Emulator oder laufendes Spiel)
 - Detektor trainieren — Datensatz und Notebook stehen, es fehlt nur die GPU
@@ -201,6 +207,12 @@ Maske → freigestelltes RGBA. Du weißt exakt was und wo, das Label fällt ab.
 - Die kontrafaktische Analyse nutzt dasselbe Vorwärtsmodell wie die Suche. Was
   das Modell falsch einschätzt, schätzt es auch im Rückblick falsch ein — grobe
   Fehlgriffe findet sie, Feinheiten nicht.
+- **Die Suche nimmt an, dass der Gegner nichts tut.** Sie rollt nur die eigenen
+  Alternativen aus. Deshalb wirkt früher Druck attraktiver, als er ist — im
+  Trockenlauf legt der Bot schon bei Sekunde 0 eine Musketiererin an die
+  Brücke. Der nächste Schritt wäre, die wahrscheinlichste gegnerische Antwort
+  mitzusimulieren; die Bedrohungsliste aus `opponent.py` liefert die Kandidaten
+  dafür bereits.
 
 ---
 
