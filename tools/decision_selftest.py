@@ -105,6 +105,50 @@ def t_latency(rs: RolloutSearch) -> None:
           f"(Budget für die Entscheidung ~120 ms)")
 
 
+def t_opponent_response_dampens(rs: RolloutSearch) -> None:
+    """Eine simulierte Gegnerantwort muss frühen Druck unattraktiver machen.
+
+    Ohne sie sieht ein Zug an der Brücke grossartig aus, weil ihn niemand
+    bestraft. Genau das war im Trockenlauf zu sehen: Der Bot legte schon bei
+    Sekunde 0 eine Musketiererin vor.
+    """
+    from crbot.opponent import OpponentModel
+
+    om = OpponentModel(rs.table)
+    for i, card in enumerate(["hog-rider", "musketeer", "knight", "fireball"]):
+        om.observe_play(i * 6.0, card)
+    om.observe_elixir(40.0, 10.0)
+
+    naive = rs.decide([], HAND, elixir=10.0)
+    aware = rs.decide([], HAND, elixir=10.0, opponent=om)
+
+    naive_role = naive.best.role if naive.best else "warten"
+    aware_role = aware.best.role if aware.best else "warten"
+    defensive = {"verteidigung", "block", "zauber"}
+
+    check("Gegnerantwort dämpft frühen Druck",
+          naive_role == "druck" and aware_role in defensive,
+          f"ohne Antwort wählt er Druck an der Brücke ({naive.best}); mit "
+          f"angenommener Antwort ({aware.response}) verteidigt er stattdessen "
+          f"({aware.best}, Rolle {aware_role})")
+
+
+def t_response_is_fair(rs: RolloutSearch) -> None:
+    """Die Antwort kommt in alle Szenarien — auch ins Warten."""
+    from crbot.opponent import OpponentModel
+
+    om = OpponentModel(rs.table)
+    om.observe_play(0.0, "hog-rider")
+    om.observe_elixir(10.0, 10.0)
+
+    without = rs.decide([], HAND, elixir=10.0)
+    with_resp = rs.decide([], HAND, elixir=10.0, opponent=om)
+    check("Antwort trifft alle Szenarien gleich",
+          with_resp.wait_score < without.wait_score,
+          f"Warte-Score sinkt von {without.wait_score:.0f} auf "
+          f"{with_resp.wait_score:.0f} — die Antwort schadet auch beim Nichtstun")
+
+
 # -------------------------------------------------------------- Kalibrierung
 
 
@@ -173,7 +217,8 @@ def main() -> int:
     rs = RolloutSearch()
     print("Rollout-Suche bereit\n")
     for fn in (t_defends_threat, t_action_masking, t_waiting_is_an_option,
-               t_spell_targets_cluster, t_determinism, t_latency):
+               t_spell_targets_cluster, t_determinism, t_latency,
+               t_opponent_response_dampens, t_response_is_fair):
         try:
             fn(rs)
         except Exception as e:  # noqa: BLE001

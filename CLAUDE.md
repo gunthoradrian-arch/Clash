@@ -75,9 +75,8 @@ Das Vorwärtsmodell rollt Kandidaten batchweise aus.
 
 ## Bekannte Grenzen
 
-- **Die Suche nimmt an, dass der Gegner nichts tut.** Deshalb wirkt früher Druck
-  attraktiver als er ist. Nächster Schritt: wahrscheinlichste gegnerische
-  Antwort mitsimulieren.
+- Die Suche simuliert **eine** gegnerische Antwort mit, pessimistisch gewählt
+  (härteste bezahlbare Karte). Keine Vorhersage — dafür fehlen Replay-Daten.
 - Vorwärtsmodell ohne Wegfindung um Gebäude, Aggro-Wechsel, Ladeangriffe,
   Verlangsamung, Schilde, Spawner. Über 3–8 s brauchbar, über 20 s nicht.
 - Zauber mit Wirkung über Zeit (Gift, Tornado, Erdbeben) haben Radius und

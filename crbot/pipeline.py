@@ -101,7 +101,8 @@ class BotLoop:
             self._last_decision_t = t
             hand = self._own_hand()
             units = [tr.as_tuple() for tr in tracks]
-            decision = self.search.decide(units, hand, our_elixir, tower_hp)
+            decision = self.search.decide(units, hand, our_elixir, tower_hp,
+                                          opponent=self.opponent)
             if decision.plays and t - self._last_play_t >= self.cfg.min_play_gap_s:
                 action = decision.best
                 self._commit(action, t)

@@ -37,6 +37,11 @@ OUR_KING = arena.px_to_tile(284.0, 776.0)
 OUR_TOWERS = (arena.px_to_tile(114.0, 684.0), arena.px_to_tile(456.0, 684.0))
 _OPP_TOWERS = (arena.px_to_tile(112.0, 211.0), arena.px_to_tile(455.0, 212.0))
 
+# Stellvertreter, solange vom Gegner noch nichts gesehen wurde: eine gewoehnliche
+# Bodeneinheit mittlerer Kosten. Nicht die haerteste Karte im Spiel - das waere
+# laehmender Pessimismus -, aber genug, um unbestraften Druck zu verhindern.
+DEFAULT_THREAT = "knight"
+
 
 @dataclasses.dataclass(slots=True)
 class Candidate:
@@ -60,6 +65,7 @@ class Decision:
     considered: int
     elapsed_ms: float
     ranked: list[tuple[Candidate | None, float]]
+    response: Candidate | None = None   # angenommene gegnerische Antwort
 
     @property
     def plays(self) -> bool:
@@ -184,9 +190,51 @@ class RolloutSearch:
 
     # ---------------------------------------------------------------- Suche
 
+    def opponent_response(self, opponent,
+                          units: list[tuple[str, int, float, float, float]]
+                          ) -> Candidate | None:
+        """Womit der Gegner am ehesten wehtut — pessimistisch, nicht vorhergesagt.
+
+        Die Suche nahm bisher an, dass der Gegner nichts tut. Das macht frühen
+        Druck attraktiver, als er ist: Ein Zug an der Brücke sieht großartig
+        aus, solange niemand ihn bestraft.
+
+        Hier wird **keine Statistik** benutzt — die bräuchte Replay-Daten.
+        Angenommen wird, dass der Gegner das Bezahlbare mit dem höchsten
+        Schadenspotenzial spielt. Das ist eine Untergrenze für unsere eigene
+        Bewertung: Wer auch gegen die harte Antwort noch gut dasteht, steht
+        gegen eine weichere erst recht gut da.
+
+        Betrachtet werden **alle bisher gesehenen Karten**, nicht nur die
+        aktuelle Hand. Sonst greift die Annahme ausgerechnet in der Eröffnung
+        nicht — dort ist die Hand noch unbekannt, und genau dort neigte der Bot
+        zu unbestraftem Druck. Ist noch gar nichts bekannt, tritt eine
+        stellvertretende Karte mittlerer Kosten an ihre Stelle.
+        """
+        known = [c for c in opponent.queue if c] or [DEFAULT_THREAT]
+        elixir = opponent.elixir()
+        best: tuple[float, Candidate] | None = None
+        for card in known:
+            if not card:
+                continue
+            st = self._stats(card)
+            if st is None or st.is_spell:
+                continue
+            cost = float(st.elixir) if st.elixir else 4.0
+            if cost > elixir:
+                continue
+            # Schadenspotenzial ueber den Horizont, grob gegen Zaehigkeit gewichtet.
+            threat = st.dps * self.horizon_s + st.hp * 0.15
+            if best is None or threat > best[0]:
+                # Er legt dort ab, wo unsere Einheiten am duennsten stehen.
+                lane = _weakest_lane(units)
+                best = (threat, Candidate(card, lane, RIVER_Y - 0.5, cost, "antwort"))
+        return best[1] if best else None
+
     def evaluate(self, units: list[tuple[str, int, float, float, float]],
                  cands: list[Candidate],
-                 tower_hp: dict[str, float] | None = None) -> tuple[float, list[float]]:
+                 tower_hp: dict[str, float] | None = None,
+                 response: Candidate | None = None) -> tuple[float, list[float]]:
         """Bewertet vorgegebene Kandidaten. Gibt (Warte-Score, Scores) zurueck.
 
         Getrennt von :meth:`decide`, damit auch **nachtraeglich** bewertet
@@ -194,7 +242,7 @@ class RolloutSearch:
         Zug neben die Alternativen.
         """
         batch = len(cands) + 1
-        capacity = 6 + len(units) + 1
+        capacity = 6 + len(units) + 2
 
         st = self.fm.with_towers(batch, capacity, tower_hp)
         for i, (cls, side, x, y, hp) in enumerate(units):
@@ -217,6 +265,15 @@ class RolloutSearch:
             else:
                 self.fm.add_unit(st, slot, key, 0, c.x, c.y, batch_mask=mask)
 
+        # Die gegnerische Antwort kommt in **alle** Szenarien gleichermassen,
+        # auch ins Warten. Nur so bleibt der Vergleich fair -- sie verschiebt
+        # das Niveau, nicht die Rangfolge zugunsten einer Option.
+        if response is not None:
+            key = (response.card if response.card in self.fm.stats.index
+                   else _base_key(response.card, self.fm.stats.index))
+            if key is not None:
+                self.fm.add_unit(st, capacity - 1, key, 1, response.x, response.y)
+
         out = self.fm.rollout(st, self.horizon_s, self.dt)
         # Reiner Turm-HP-Saldo; das Elixir kommt erst in der Schwelle dazu.
         scores = self.fm.score(st, out)
@@ -224,18 +281,33 @@ class RolloutSearch:
 
     def decide(self, units: list[tuple[str, int, float, float, float]],
                hand: list[str], elixir: float,
-               tower_hp: dict[str, float] | None = None) -> Decision:
+               tower_hp: dict[str, float] | None = None,
+               opponent=None) -> Decision:
         """Waehlt den besten Zug.
 
         ``units`` sind die wahrgenommenen Einheiten als
         ``(klasse, seite, x, y, hp)``.
+
+        ``opponent`` ist ein :class:`crbot.opponent.OpponentModel`. Wird es
+        uebergeben, simuliert die Suche eine gegnerische Antwort mit -- das
+        daempft die Vorliebe fuer frueh gelegten Druck.
         """
         t0 = time.perf_counter()
         threats = [(x, y) for cls, side, x, y, _hp in units
                    if side == 1 and self._stats(cls) is not None]
 
+        response = None
+        if opponent is not None:
+            response = self.opponent_response(opponent, units)
+            if response is not None:
+                # Auch als Bedrohung behandeln: Sonst erzeugt die Suche fuer
+                # eine Lage, die sie selbst annimmt, keine Verteidigungszuege
+                # -- und waehlt dann zufaellig einen Angriffszug, der zufaellig
+                # auf der richtigen Bahn liegt.
+                threats = threats + [(response.x, response.y)]
+
         cands = self.candidates([c for c in hand if c], elixir, threats)
-        wait_score, scores = self.evaluate(units, cands, tower_hp)
+        wait_score, scores = self.evaluate(units, cands, tower_hp, response)
 
         ranked: list[tuple[Candidate | None, float]] = [(None, wait_score)]
         ranked += list(zip(cands, scores))
@@ -252,6 +324,7 @@ class RolloutSearch:
             best=best_cand, score=best_score, wait_score=wait_score,
             considered=len(cands), ranked=ranked[:8],
             elapsed_ms=(time.perf_counter() - t0) * 1000.0,
+            response=response,
         )
 
 
@@ -260,6 +333,16 @@ def _base_key(card: str, index: dict[str, int]) -> str | None:
         if card.endswith(suffix) and card[: -len(suffix)] in index:
             return card[: -len(suffix)]
     return None
+
+
+def _weakest_lane(units: list[tuple[str, int, float, float, float]]) -> float:
+    """Die Bahn, auf der wir am duennsten stehen — dort greift der Gegner an."""
+    own = [(x, y) for _cls, side, x, y, _hp in units if side == 0]
+    if not own:
+        return BRIDGES[0]
+    left = sum(1 for x, _y in own if x < arena.TILES_W / 2)
+    right = len(own) - left
+    return BRIDGES[0] if left <= right else BRIDGES[1]
 
 
 def _clusters(points: list[tuple[float, float]], radius: float = 2.5

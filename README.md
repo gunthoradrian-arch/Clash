@@ -220,12 +220,9 @@ Maske → freigestelltes RGBA. Du weißt exakt was und wo, das Label fällt ab.
 - Die kontrafaktische Analyse nutzt dasselbe Vorwärtsmodell wie die Suche. Was
   das Modell falsch einschätzt, schätzt es auch im Rückblick falsch ein — grobe
   Fehlgriffe findet sie, Feinheiten nicht.
-- **Die Suche nimmt an, dass der Gegner nichts tut.** Sie rollt nur die eigenen
-  Alternativen aus. Deshalb wirkt früher Druck attraktiver, als er ist — im
-  Trockenlauf legt der Bot schon bei Sekunde 0 eine Musketiererin an die
-  Brücke. Der nächste Schritt wäre, die wahrscheinlichste gegnerische Antwort
-  mitzusimulieren; die Bedrohungsliste aus `opponent.py` liefert die Kandidaten
-  dafür bereits.
+- Die simulierte Gegnerantwort ist **pessimistisch, keine Vorhersage**: Sie
+  nimmt die härteste bezahlbare Karte an, nicht die wahrscheinlichste. Für eine
+  echte Vorhersage bräuchte es Platzierungs-Priors aus Replay-Daten.
 
 ---
 
