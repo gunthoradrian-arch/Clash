@@ -15,6 +15,7 @@ Was modelliert wird
 * Bewegung mit echtem Tempo, Bodeneinheiten **über die Brücken**
 * Schaden über DPS, Flächenschaden im Umkreis
 * Türme als unbewegliche Einheiten — dadurch kein Sonderfall in der Zielwahl
+* Kollision zwischen Bodeneinheiten nach Masse — dadurch **Blocken**
 
 Was bewusst fehlt
 -----------------
@@ -73,7 +74,9 @@ class StatArrays:
     is_air: np.ndarray
     splash: np.ndarray
     radius: np.ndarray
+    mass: np.ndarray
     is_building: np.ndarray
+    is_spell: np.ndarray
 
     @classmethod
     def from_table(cls, table: dict[str, UnitStats]) -> "StatArrays":
@@ -82,13 +85,19 @@ class StatArrays:
         g = lambda f: np.array([getattr(table[k], f) for k in keys], dtype=np.float32)  # noqa: E731
         b = lambda f: np.array([getattr(table[k], f) for k in keys], dtype=bool)        # noqa: E731
         speed = g("speed")
+        spell = b("is_spell")
         return cls(
             keys=keys, index=idx,
             hp=g("hp"), dps=g("dps"), range=g("range"), speed=speed,
             attacks_ground=b("attacks_ground"), attacks_air=b("attacks_air"),
             buildings_only=b("targets_buildings_only"), is_air=b("is_air"),
             splash=g("splash_radius"), radius=g("collision_radius"),
-            is_building=(speed <= 0.0),
+            mass=g("mass"),
+            # Zauber stehen ebenfalls mit Tempo 0 in der Tabelle, sind aber
+            # keine Gebaeude -- sonst zaehlten sie in die Turm-HP hinein und
+            # bekaemen den Zauber-Schadensabschlag.
+            is_building=(speed <= 0.0) & ~spell,
+            is_spell=spell,
         )
 
 
@@ -217,6 +226,43 @@ class ForwardModel:
         goal[..., 1] = np.where(need_bridge, RIVER_Y_TILES, goal[..., 1])
         return goal
 
+    def _resolve_collisions(self, st: BatchState, strength: float = 0.6) -> None:
+        """Drückt überlappende Bodeneinheiten auseinander.
+
+        Ohne das gibt es kein **Blocken** — und Blocken ist die halbe
+        Verteidigung im Spiel. Ein Ritter vor einem Hog Rider hält ihn auf,
+        statt von ihm durchlaufen zu werden.
+
+        Verdrängt wird nach Masse: Ein Golem (Masse 20) schiebt ein Skelett
+        (Masse 1) beiseite, umgekehrt passiert praktisch nichts. Lufteinheiten
+        sind ausgenommen, sie fliegen über alles hinweg.
+        """
+        s = self.stats
+        ground = (~s.is_air[st.type_idx]) & st.alive & (~s.is_building[st.type_idx])
+        if not ground.any():
+            return
+
+        radius = s.radius[st.type_idx]
+        mass = np.maximum(s.mass[st.type_idx], 0.5)
+
+        delta = st.pos[:, :, None, :] - st.pos[:, None, :, :]
+        dist = np.linalg.norm(delta, axis=-1)
+        min_dist = radius[:, :, None] + radius[:, None, :]
+
+        pair = ground[:, :, None] & ground[:, None, :]
+        np.einsum("bii->bi", pair)[...] = False       # sich selbst nicht schieben
+        overlap = np.where(pair & (dist < min_dist) & (dist > 1e-6),
+                           min_dist - dist, 0.0)
+        if not np.any(overlap > 0):
+            return
+
+        direction = np.divide(delta, dist[..., None],
+                              out=np.zeros_like(delta), where=dist[..., None] > 1e-6)
+        # Der Leichtere weicht: Anteil = Masse des anderen / Gesamtmasse.
+        share = mass[:, None, :] / (mass[:, :, None] + mass[:, None, :])
+        shift = (overlap * share * strength)[..., None] * direction
+        st.pos += shift.sum(axis=2)
+
     def step(self, st: BatchState, dt: float) -> None:
         """Ein Zeitschritt, in-place."""
         s = self.stats
@@ -237,6 +283,9 @@ class ForwardModel:
         direction = np.divide(delta, norm, out=np.zeros_like(delta), where=norm > 1e-6)
         stepsize = (s.speed[st.type_idx] * dt)[..., None]
         st.pos += np.where(moving[..., None], direction * np.minimum(stepsize, norm), 0.0)
+
+        # Nach der Bewegung Ueberlappungen aufloesen -- daraus entsteht Blocken.
+        self._resolve_collisions(st)
 
         # --- Schaden am Einzelziel
         dmg = np.where(in_range, s.dps[st.type_idx] * dt, 0.0)

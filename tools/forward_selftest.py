@@ -17,6 +17,7 @@ import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
+from crbot import arena  # noqa: E402
 from crbot.forward import (  # noqa: E402
     RIVER_Y_TILES, BRIDGE_X_TILES, ForwardModel,
 )
@@ -136,6 +137,66 @@ def t_air_ignores_river(fm: ForwardModel) -> None:
           f"{dy:.2f} Kacheln nach vorn, ohne Umweg über die Brücke")
 
 
+def t_blocking(fm: ForwardModel) -> None:
+    """Ein Ritter im Weg muss einen Hog Rider aufhalten.
+
+    Blocken ist die halbe Verteidigung im Spiel. Ohne Kollision liefe der Hog
+    einfach durch den Ritter hindurch, und das Modell wuerde jede Blockade als
+    wirkungslos bewerten.
+    """
+    start_y = RIVER_Y_TILES + 1.0
+    tower_y = arena.px_to_tile(114.0, 684.0)[1]
+    x = BRIDGE_X_TILES[0]
+
+    free = duel_state(fm)
+    fm.add_unit(free, 0, "princess-tower", 0, x, tower_y, hp=3052.0)
+    fm.add_unit(free, 6, "hog-rider", 1, x, start_y)
+    out_free = fm.rollout(free, horizon_s=3.0, dt=0.05)
+    progress_free = out_free.pos[0, 6, 1] - start_y
+
+    blocked = duel_state(fm)
+    fm.add_unit(blocked, 0, "princess-tower", 0, x, tower_y, hp=3052.0)
+    fm.add_unit(blocked, 6, "hog-rider", 1, x, start_y)
+    fm.add_unit(blocked, 7, "knight", 0, x, start_y + 1.2)
+    out_blocked = fm.rollout(blocked, horizon_s=3.0, dt=0.05)
+    progress_blocked = out_blocked.pos[0, 6, 1] - start_y
+
+    check("Ritter blockt Hog Rider",
+          progress_blocked < progress_free * 0.6,
+          f"ohne Blocker {progress_free:.2f} Kacheln vor, mit Ritter nur "
+          f"{progress_blocked:.2f} ({100 * progress_blocked / max(progress_free, 1e-6):.0f} %)")
+
+
+def t_air_not_blocked(fm: ForwardModel) -> None:
+    """Lufteinheiten lassen sich nicht blocken."""
+    start_y = RIVER_Y_TILES + 1.0
+    x = BRIDGE_X_TILES[0]
+    tower_y = arena.px_to_tile(114.0, 684.0)[1]
+
+    st = duel_state(fm)
+    fm.add_unit(st, 0, "princess-tower", 0, x, tower_y, hp=3052.0)
+    fm.add_unit(st, 6, "balloon", 1, x, start_y)
+    fm.add_unit(st, 7, "knight", 0, x, start_y + 1.2)
+    out = fm.rollout(st, horizon_s=3.0, dt=0.05)
+    progress = out.pos[0, 6, 1] - start_y
+    expected = 0.75 * 3.0   # Ballon-Tempo
+    check("Lufteinheit ignoriert Blocker",
+          progress > expected * 0.8,
+          f"{progress:.2f} Kacheln trotz Ritter im Weg (frei waeren {expected:.2f})")
+
+
+def t_no_stacking(fm: ForwardModel) -> None:
+    """Zwei Einheiten auf demselben Punkt schieben sich auseinander."""
+    st = duel_state(fm)
+    fm.add_unit(st, 6, "knight", 0, 9.0, 20.0)
+    fm.add_unit(st, 7, "knight", 0, 9.0, 20.05)
+    out = fm.rollout(st, horizon_s=1.0, dt=0.05)
+    gap = float(np.linalg.norm(out.pos[0, 6] - out.pos[0, 7]))
+    check("Einheiten stapeln nicht",
+          gap > 0.7,
+          f"Abstand nach 1 s: {gap:.2f} Kacheln (Kollisionsradius je 0,5)")
+
+
 def t_batch_consistency(fm: ForwardModel) -> None:
     """Gleiche Szenarien im Batch müssen identische Ergebnisse liefern."""
     b = 64
@@ -193,6 +254,7 @@ def main() -> int:
 
     for fn in (t_movement_speed, t_knight_vs_skeleton, t_range_advantage,
                t_buildings_only, t_river_routing, t_air_ignores_river,
+               t_blocking, t_air_not_blocked, t_no_stacking,
                t_batch_consistency, t_scoring, t_throughput):
         try:
             fn(fm)
