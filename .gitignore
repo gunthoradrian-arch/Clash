@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Datensaetze und Gewichte gehoeren nicht ins Repo
+data/
+runs/
+*.pt
+*.onnx
+*.engine
+docs/dataset-report.json

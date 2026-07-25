@@ -1,0 +1,8 @@
+# Wahrnehmungsschicht + Datensatz-Erzeugung
+numpy>=1.26
+pillow>=10.0
+opencv-python-headless>=4.9
+pyyaml>=6.0
+
+# Training laeuft auf Colab/Kaggle, nicht lokal:
+#   pip install ultralytics
