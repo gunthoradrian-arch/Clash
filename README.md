@@ -91,8 +91,12 @@ tools/
   pipeline_selftest.py  Trockenlauf der ganzen Schleife, 6 Prüfungen
 training/
   train_colab.ipynb     Training auf Gratis-GPU, läuft im Browser
+scripts/
+  setup.sh / setup.ps1  Umgebung einrichten und alle Tests laufen lassen
 docs/
   dataset-report.md     Generierter Report
+  handover.md           Übergabe: Stand, Reihenfolge, offene Punkte
+CLAUDE.md               Projektkontext für eine Claude-Code-Sitzung
 ```
 
 ### Arena-Geometrie aus Daten
@@ -120,6 +124,15 @@ Größenunterschied der beiden Prinzessinnenturm-Reihen.
 ---
 
 ## Loslegen
+
+Ein Befehl richtet alles ein und prüft es:
+
+```bash
+./scripts/setup.sh                                    # Linux/macOS
+powershell -ExecutionPolicy Bypass -File scripts\setup.ps1   # Windows
+```
+
+Oder von Hand:
 
 ```bash
 pip install -r requirements.txt
