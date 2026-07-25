@@ -185,7 +185,7 @@ Maske → freigestelltes RGBA. Du weißt exakt was und wo, das Label fällt ab.
 - Komplette Schleife im Trockenlauf, 6/6 Selbsttests
 - Colab-Notebook
 
-**45 Selbsttests laufen ohne GPU, ohne Emulator und ohne Spiel.**
+**47 Selbsttests laufen ohne GPU, ohne Emulator und ohne Spiel.**
 
 **Braucht zwingend den PC** (GPU, Emulator oder laufendes Spiel)
 - Detektor trainieren — Datensatz und Notebook stehen, es fehlt nur die GPU

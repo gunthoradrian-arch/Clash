@@ -3,9 +3,11 @@ __pycache__/
 .venv/
 venv/
 
-# Datensaetze und Gewichte gehoeren nicht ins Repo
-data/
-runs/
+# Datensaetze und Gewichte gehoeren nicht ins Repo.
+# Fuehrender Schraegstrich verankert auf die Repo-Wurzel: ohne ihn traf "data/"
+# auch crbot/data/ und hielt die eingecheckte Kampfwerte-Tabelle draussen.
+/data/
+/runs/
 *.pt
 *.onnx
 *.engine

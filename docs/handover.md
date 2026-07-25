@@ -21,7 +21,7 @@ git clone --depth 1 https://github.com/wty-yy/Clash-Royale-Detection-Dataset.git
 for t in forward opponent decision tracker pipeline; do python tools/${t}_selftest.py; done
 ```
 
-Erwartet: 12 + 10 + 10 + 7 + 6 = **45 bestandene Tests**.
+Erwartet: 12 + 10 + 12 + 7 + 6 = **47 bestandene Tests**.
 
 Unter Windows PowerShell statt der Schleife:
 
